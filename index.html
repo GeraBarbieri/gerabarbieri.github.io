@@ -1,0 +1,1577 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Alquiler de Carpas - CarpaManager Cloud</title>
+    <!-- Tailwind CSS para diseño adaptable e inteligente -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Iconos de FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Fuente Google Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="h-screen flex overflow-hidden flex-col md:flex-row">
+
+    <!-- PANTALLA DE CARGA INICIAL CON BYPASS AUTOMÁTICO -->
+    <div id="loading-screen" class="fixed inset-0 bg-slate-900 z-[9999] flex flex-col items-center justify-center text-white transition-opacity duration-500">
+        <div class="bg-emerald-500 text-white p-4 rounded-2xl shadow-xl shadow-emerald-500/20 mb-4 animate-bounce">
+            <i class="fa-solid fa-tent text-3xl"></i>
+        </div>
+        <h3 class="text-lg font-bold">Conectando a Firebase Cloud...</h3>
+        <p class="text-xs text-slate-400 mt-2 text-center max-w-xs px-6" id="loading-status-text">Sincronizando inventario y alquileres en tiempo real</p>
+        
+        <div id="loading-spinner-bar" class="w-24 h-1.5 bg-slate-800 rounded-full mt-4 overflow-hidden">
+            <div class="w-1/2 h-full bg-emerald-400 rounded-full animate-infinite-scroll" style="animation: loading-slide 1.5s infinite ease-in-out;"></div>
+        </div>
+
+        <!-- Botón para trabajar en local si falla Auth de Firebase -->
+        <button id="btn-bypass-loading" class="hidden mt-8 px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-900 font-semibold text-xs rounded-xl shadow-lg transition duration-200">
+            <i class="fa-solid fa-house-laptop mr-1.5"></i> Continuar en Modo Local (Offline)
+        </button>
+
+        <style>
+            @keyframes loading-slide {
+                0% { transform: translateX(-100%); }
+                100% { transform: translateX(200%); }
+            }
+        </style>
+    </div>
+
+    <!-- BACKDROP PARA MÓVIL (Cierra el menú al tocar fuera) -->
+    <div id="sidebar-backdrop" class="fixed inset-0 bg-slate-950/50 z-30 hidden md:hidden transition-opacity duration-300 opacity-0"></div>
+
+    <!-- SIDEBAR DE NAVEGACIÓN (Adaptable y deslizable) -->
+    <aside id="sidebar" class="fixed inset-y-0 left-0 z-40 w-64 bg-slate-900 text-slate-300 flex flex-col justify-between p-6 shrink-0 transform -translate-x-full md:translate-x-0 md:static transition-transform duration-300 ease-in-out">
+        <div>
+            <!-- Logo / Cabecera Sidebar -->
+            <div class="flex items-center justify-between mb-8">
+                <div class="flex items-center gap-3">
+                    <div class="bg-emerald-500 text-white p-2.5 rounded-xl shadow-lg shadow-emerald-500/20">
+                        <i class="fa-solid fa-tent text-xl"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-white font-bold text-lg leading-tight">CarpaManager</h1>
+                        <span id="badge-connection-mode" class="text-emerald-400 text-xs font-semibold uppercase tracking-wider">v3.0 - Cloud</span>
+                    </div>
+                </div>
+                <!-- Botón de cierre en Móvil -->
+                <button id="btn-close-sidebar" class="md:hidden text-slate-400 hover:text-white p-1">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+
+            <!-- Menú de Pestañas -->
+            <nav class="space-y-1.5">
+                <button id="btn-tab-dashboard" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl transition duration-200 font-medium bg-slate-800 text-emerald-400">
+                    <i class="fa-solid fa-chart-pie w-5 text-lg"></i>
+                    <span>Dashboard</span>
+                </button>
+                <button id="btn-tab-inventario" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl transition duration-200 font-medium text-slate-400 hover:bg-slate-800/50 hover:text-white">
+                    <i class="fa-solid fa-boxes-stacked w-5 text-lg"></i>
+                    <span>Inventario</span>
+                </button>
+                <button id="btn-tab-clientes" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl transition duration-200 font-medium text-slate-400 hover:bg-slate-800/50 hover:text-white">
+                    <i class="fa-solid fa-users w-5 text-lg"></i>
+                    <span>Clientes</span>
+                </button>
+                <button id="btn-tab-alquileres" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl transition duration-200 font-medium text-slate-400 hover:bg-slate-800/50 hover:text-white">
+                    <i class="fa-solid fa-file-invoice-dollar w-5 text-lg"></i>
+                    <span>Alquileres</span>
+                </button>
+            </nav>
+        </div>
+
+        <!-- Footer del Sidebar -->
+        <div class="border-t border-slate-800 pt-4">
+            <p class="text-xs text-slate-500 text-center">Estado de Red</p>
+            <div class="flex justify-center gap-2 mt-2">
+                <span id="led-connection-status" class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
+                <span id="text-connection-status" class="text-[10px] text-slate-400 font-mono">Firebase Online</span>
+            </div>
+        </div>
+    </aside>
+
+    <!-- ÁREA PRINCIPAL DE CONTENIDO -->
+    <main class="flex-1 flex flex-col overflow-hidden w-full">
+        
+        <!-- TOPBAR DE ACCIONES RÁPIDAS -->
+        <header class="bg-white border-b border-slate-100 h-16 flex items-center justify-between px-4 md:px-8 shrink-0">
+            <div class="flex items-center gap-3">
+                <!-- Botón Hamburguesa para móviles -->
+                <button id="btn-open-sidebar" class="md:hidden text-slate-700 hover:bg-slate-100 p-2 rounded-xl transition">
+                    <i class="fa-solid fa-bars text-xl"></i>
+                </button>
+                <div>
+                    <h2 id="main-title" class="text-slate-800 font-bold text-base md:text-xl truncate max-w-[140px] xs:max-w-none">Resumen de Operaciones</h2>
+                    <span class="hidden md:inline-block text-xs text-slate-400 bg-slate-100 px-2.5 py-1 rounded-full font-medium" id="current-date-badge"></span>
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-1.5 md:gap-3">
+                <button id="btn-seed-data" class="text-xs text-slate-500 hover:text-emerald-600 transition p-1.5 rounded-lg hover:bg-emerald-50" title="Cargar Datos Demo de Fábrica">
+                    <i class="fa-solid fa-cloud-arrow-down mr-1"></i> Demo
+                </button>
+                <div class="h-6 w-[1px] bg-slate-200"></div>
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-white font-bold text-xs md:text-sm">
+                        AD
+                    </div>
+                    <span class="text-slate-700 font-medium text-xs md:text-sm hidden sm:inline">Administrador</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- CONTENEDOR DINÁMICO DE PESTAÑAS (Scrollable) -->
+        <div class="flex-1 overflow-y-auto p-4 md:p-8 no-scrollbar">
+
+            <!-- 1. PESTAÑA: DASHBOARD -->
+            <section id="tab-dashboard" class="tab-content space-y-6 md:space-y-8">
+                <!-- Banner decorativo con Imagen adaptable -->
+                <div class="relative bg-slate-950 rounded-2xl overflow-hidden h-36 md:h-48 flex items-center px-6 md:px-8 shadow-md">
+                    <div class="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-900/90 to-transparent z-10"></div>
+                    <img src="https://images.unsplash.com/photo-1517457373958-b7bdd4587205?auto=format&fit=crop&q=80&w=800" alt="Carpas de Eventos" class="absolute right-0 top-0 w-1/2 h-full object-cover opacity-40 md:opacity-60" onerror="this.src='https://placehold.co/800x400/0f172a/ffffff?text=Carpas+Premium'">
+                    <div class="relative z-20 max-w-md">
+                        <h3 class="text-white font-bold text-lg md:text-2xl mb-1 md:mb-2">Control de Alquileres & Módulos</h3>
+                        <p id="dashboard-banner-text" class="text-slate-400 text-xs md:text-sm leading-relaxed">Conectado a Firebase Cloud. Todos tus dispositivos sincronizados al instante.</p>
+                    </div>
+                </div>
+
+                <!-- Tarjetas de Métricas Clave -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+                    <div class="bg-white p-4 md:p-6 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between">
+                        <div>
+                            <span class="text-[10px] md:text-xs font-semibold uppercase tracking-wider text-slate-400">Módulos Libres Hoy</span>
+                            <h4 id="stat-disponibles" class="text-2xl md:text-3xl font-extrabold text-slate-800 mt-1">0</h4>
+                        </div>
+                        <div class="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg md:text-xl">
+                            <i class="fa-solid fa-circle-check"></i>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white p-4 md:p-6 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between">
+                        <div>
+                            <span class="text-[10px] md:text-xs font-semibold uppercase tracking-wider text-slate-400">Contratos Activos</span>
+                            <h4 id="stat-activos" class="text-2xl md:text-3xl font-extrabold text-slate-800 mt-1">0</h4>
+                        </div>
+                        <div class="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-lg md:text-xl">
+                            <i class="fa-solid fa-file-contract"></i>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-4 md:p-6 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between">
+                        <div>
+                            <span class="text-[10px] md:text-xs font-semibold uppercase tracking-wider text-slate-400">Vencidos / Demorados</span>
+                            <h4 id="stat-demorados" class="text-2xl md:text-3xl font-extrabold text-rose-600 mt-1">0</h4>
+                        </div>
+                        <div class="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center text-lg md:text-xl">
+                            <i class="fa-solid fa-clock-rotate-left animate-pulse"></i>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-4 md:p-6 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between">
+                        <div>
+                            <span class="text-[10px] md:text-xs font-semibold uppercase tracking-wider text-slate-400">Ingresos Totales</span>
+                            <h4 id="stat-ingresos" class="text-xl md:text-2xl font-extrabold text-slate-800 mt-1.5">$0</h4>
+                        </div>
+                        <div class="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center text-lg md:text-xl">
+                            <i class="fa-solid fa-money-bill-wave"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Dos Columnas -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
+                    <!-- Tabla Resumen -->
+                    <div class="bg-white p-4 md:p-6 rounded-2xl border border-slate-100 shadow-sm lg:col-span-2">
+                        <div class="flex items-center justify-between mb-4">
+                            <h4 class="text-slate-800 font-bold text-sm md:text-base">Monitoreo de Alquileres Recientes</h4>
+                            <button id="btn-goto-alquileres" class="text-xs text-emerald-600 hover:text-emerald-700 font-semibold flex items-center gap-1">Ver todos <i class="fa-solid fa-chevron-right text-[10px]"></i></button>
+                        </div>
+                        <div class="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+                            <table class="w-full text-left text-xs md:text-sm min-w-[500px]">
+                                <thead>
+                                    <tr class="text-slate-400 font-medium border-b border-slate-100">
+                                        <th class="pb-3">Cliente</th>
+                                        <th class="pb-3">Detalle / Módulos</th>
+                                        <th class="pb-3">Fecha Devolución</th>
+                                        <th class="pb-3">Estado</th>
+                                        <th class="pb-3 text-right">Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="dashboard-rentals-tbody">
+                                    <!-- Dinámico por JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Estado del servidor -->
+                    <div class="bg-white p-4 md:p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+                        <h4 class="text-slate-800 font-bold text-sm md:text-base">Estado de la Red</h4>
+                        <div class="space-y-3" id="network-cards-container">
+                            <div id="cloud-network-card" class="p-3 bg-emerald-50 border border-emerald-100 rounded-xl flex items-start gap-3">
+                                <i class="fa-solid fa-cloud text-emerald-600 mt-1 text-sm shrink-0"></i>
+                                <div>
+                                    <h5 class="text-slate-800 text-xs font-semibold">Base de datos Cloud</h5>
+                                    <p class="text-slate-500 text-[11px] mt-0.5">Firebase Firestore está escuchando cambios entrantes.</p>
+                                </div>
+                            </div>
+                            <div class="p-3 bg-indigo-50 border border-indigo-100 rounded-xl flex items-start gap-3">
+                                <i class="fa-solid fa-mobile-screen-button text-indigo-600 mt-1 text-sm shrink-0"></i>
+                                <div>
+                                    <h5 class="text-slate-800 text-xs font-semibold">Modo Responsivo</h5>
+                                    <p class="text-slate-500 text-[11px] mt-0.5">La aplicación se adapta automáticamente a tu móvil, tablet o PC.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 2. PESTAÑA: INVENTARIO -->
+            <section id="tab-inventario" class="tab-content hidden space-y-6">
+                <div class="flex flex-col sm:flex-row gap-3 sm:items-center justify-between bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                    <div class="relative w-full sm:w-72">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400 text-sm"></i>
+                        <input type="text" id="search-inventario" placeholder="Buscar por código, tipo o medida..." class="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition">
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <button id="btn-open-categories" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-sm px-3.5 py-2 rounded-xl flex items-center justify-center gap-2 transition flex-1 sm:flex-initial">
+                            <i class="fa-solid fa-sliders text-slate-500"></i> Categorías
+                        </button>
+                        <button id="btn-open-carpa-modal" class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-sm px-4 py-2 rounded-xl flex items-center justify-center gap-2 transition shadow-sm hover:shadow-emerald-500/10 flex-1 sm:flex-initial">
+                            <i class="fa-solid fa-plus"></i> Nueva Carpa
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs md:text-sm min-w-[700px]">
+                            <thead class="bg-slate-50 border-b border-slate-100 text-slate-500 font-medium">
+                                <tr>
+                                    <th class="p-4">ID / Código</th>
+                                    <th class="p-4">Tipo de Carpa</th>
+                                    <th class="p-4">Medidas</th>
+                                    <th class="p-4">Precio x Día</th>
+                                    <th class="p-4">Stock de Módulos</th>
+                                    <th class="p-4">Estado General</th>
+                                    <th class="p-4 text-right">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="inventario-tbody" class="divide-y divide-slate-100">
+                                <!-- Dinámico -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 3. PESTAÑA: CLIENTES -->
+            <section id="tab-clientes" class="tab-content hidden space-y-6">
+                <div class="flex flex-col sm:flex-row gap-3 sm:items-center justify-between bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                    <div class="relative w-full sm:w-72">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400 text-sm"></i>
+                        <input type="text" id="search-clientes" placeholder="Buscar cliente por nombre o CUIT..." class="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition">
+                    </div>
+                    <button id="btn-open-cliente-modal" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-sm px-4 py-2 rounded-xl flex items-center justify-center gap-2 transition shadow-sm hover:shadow-indigo-500/10 w-full sm:w-auto">
+                        <i class="fa-solid fa-user-plus"></i> Registrar Cliente
+                    </button>
+                </div>
+
+                <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs md:text-sm min-w-[650px]">
+                            <thead class="bg-slate-50 border-b border-slate-100 text-slate-500 font-medium">
+                                <tr>
+                                    <th class="p-4">ID Cliente</th>
+                                    <th class="p-4">Nombre / Razón Social</th>
+                                    <th class="p-4">CUIT / Identificación</th>
+                                    <th class="p-4">Contacto</th>
+                                    <th class="p-4">Email</th>
+                                    <th class="p-4 text-right">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="clientes-tbody" class="divide-y divide-slate-100">
+                                <!-- Dinámico -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 4. PESTAÑA: ALQUILERES -->
+            <section id="tab-alquileres" class="tab-content hidden space-y-6">
+                <div class="flex flex-col sm:flex-row gap-3 sm:items-center justify-between bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                    <div class="relative w-full sm:w-72">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400 text-sm"></i>
+                        <input type="text" id="search-alquileres" placeholder="Buscar alquiler..." class="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition">
+                    </div>
+                    <button id="btn-open-alquiler-modal" class="bg-amber-500 hover:bg-amber-600 text-white font-medium text-sm px-4 py-2 rounded-xl flex items-center justify-center gap-2 transition shadow-sm hover:shadow-amber-500/10 w-full sm:w-auto">
+                        <i class="fa-solid fa-plus"></i> Registrar Alquiler por Módulos
+                    </button>
+                </div>
+
+                <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs md:text-sm min-w-[950px]">
+                            <thead class="bg-slate-50 border-b border-slate-100 text-slate-500 font-medium">
+                                <tr>
+                                    <th class="p-4">ID Reg</th>
+                                    <th class="p-4">Cliente</th>
+                                    <th class="p-4">Estructura</th>
+                                    <th class="p-4">Módulos Rentados</th>
+                                    <th class="p-4">F. Salida</th>
+                                    <th class="p-4">F. Retorno</th>
+                                    <th class="p-4">Estado</th>
+                                    <th class="p-4">Monto Neto</th>
+                                    <th class="p-4">Total c/IVA</th>
+                                    <th class="p-4 text-right">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="alquileres-tbody" class="divide-y divide-slate-100">
+                                <!-- Dinámico -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+            
+    <!-- MODAL: AGREGAR CARPA -->
+    <div id="modal-carpa" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl max-h-[90vh] overflow-y-auto no-scrollbar">
+            <div class="flex justify-between items-center mb-6">
+                <h4 class="text-slate-800 font-bold text-lg">Agregar Nueva Carpa al Inventario</h4>
+                <button id="btn-close-carpa-modal" class="text-slate-400 hover:text-slate-600 p-1 transition"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <form id="form-carpa" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 mb-1">Código / ID único</label>
+                    <input type="text" id="carpa-id" required placeholder="Ej: CAR-010" class="w-full p-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none uppercase">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 mb-1 flex justify-between">
+                        <span>Tipo de Carpa</span>
+                    </label>
+                    <select id="carpa-tipo" required class="w-full p-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                        <!-- Dinámico -->
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 mb-1">Medidas (Metros)</label>
+                    <input type="text" id="carpa-medidas" required placeholder="Ej: 10x20m o Módulo 4x4" class="w-full p-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1">Precio x Día (ARS)</label>
+                        <input type="number" id="carpa-precio" required min="1" placeholder="150000" class="w-full p-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1 text-emerald-600 font-bold">Módulos en Stock</label>
+                        <input type="number" id="carpa-stock" required min="1" placeholder="Ej: 8" class="w-full p-2.5 border-emerald-300 border-2 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none font-semibold">
+                    </div>
+                </div>
+                
+                <div class="flex gap-3 pt-4">
+                    <button type="button" id="btn-cancel-carpa" class="flex-1 py-2.5 border border-slate-200 text-slate-600 rounded-xl text-sm font-semibold hover:bg-slate-50 transition">Cancelar</button>
+                    <button type="submit" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold transition">Guardar en Stock</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: GESTIONAR TIPOS DE CARPA -->
+    <div id="modal-tipos-carpa" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl max-h-[90vh] overflow-y-auto no-scrollbar">
+            <div class="flex justify-between items-center mb-5">
+                <h4 class="text-slate-800 font-bold text-lg">Gestionar Tipos de Carpas</h4>
+                <button id="btn-close-categories" class="text-slate-400 hover:text-slate-600 p-1 transition"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            
+            <form id="form-nuevo-tipo" class="mb-6">
+                <label class="block text-xs font-semibold text-slate-500 mb-1.5">Nuevo Tipo de Carpa / Categoría</label>
+                <div class="flex gap-2">
+                    <input type="text" id="nuevo-tipo-input" required placeholder="Ej: Carpa Árabe" class="flex-1 p-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white p-2.5 rounded-xl text-sm font-semibold flex items-center justify-center transition">
+                        <i class="fa-solid fa-plus px-1"></i>
+                    </button>
+                </div>
+            </form>
+
+            <div>
+                <label class="block text-xs font-semibold text-slate-500 mb-2">Tipos Registrados</label>
+                <ul id="lista-tipos-carpa" class="border border-slate-100 rounded-xl divide-y divide-slate-100 overflow-hidden max-h-48 overflow-y-auto no-scrollbar">
+                    <!-- Dinámico -->
+                </ul>
+            </div>
+
+            <div class="pt-5 border-t border-slate-100 mt-5">
+                <button type="button" id="btn-back-categories" class="w-full py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-sm font-semibold transition">Volver y Sincronizar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: REGISTRAR CLIENTE -->
+    <div id="modal-cliente" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl max-h-[90vh] overflow-y-auto no-scrollbar">
+            <div class="flex justify-between items-center mb-6">
+                <h4 class="text-slate-800 font-bold text-lg">Registrar Nuevo Cliente</h4>
+                <button id="btn-close-cliente-modal" class="text-slate-400 hover:text-slate-600 p-1 transition"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <form id="form-cliente" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 mb-1">Nombre / Razón Social</label>
+                    <input type="text" id="cliente-nombre" required placeholder="Ej: Eventos Mendoza S.A." class="w-full p-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 mb-1">CUIT / Identificación Fiscal</label>
+                    <input type="text" id="cliente-cuit" required placeholder="Ej: 30-12345678-9" class="w-full p-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 mb-1">Teléfono de Contacto</label>
+                    <input type="text" id="cliente-tel" required placeholder="Ej: 261456789" class="w-full p-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 mb-1">Correo Electrónico</label>
+                    <input type="email" id="cliente-email" required placeholder="Ej: contacto@empresa.com" class="w-full p-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                </div>
+                <div class="flex gap-3 pt-4">
+                    <button type="button" id="btn-cancel-cliente" class="flex-1 py-2.5 border border-slate-200 text-slate-600 rounded-xl text-sm font-semibold hover:bg-slate-50 transition">Cancelar</button>
+                    <button type="submit" class="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition">Guardar Cliente</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: REGISTRAR ALQUILER -->
+    <div id="modal-alquiler" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl max-h-[95vh] overflow-y-auto no-scrollbar">
+            <div class="flex justify-between items-center mb-6">
+                <h4 class="text-slate-800 font-bold text-lg">Registrar Nuevo Alquiler</h4>
+                <button id="btn-close-alquiler-modal" class="text-slate-400 hover:text-slate-600 p-1 transition"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <form id="form-alquiler" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 mb-1">Seleccionar Cliente</label>
+                    <select id="alquiler-cliente" required class="w-full p-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                        <!-- Dinámico -->
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 mb-1">Seleccionar Carpa / Estructura</label>
+                    <select id="alquiler-carpa" required class="w-full p-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                        <!-- Dinámico -->
+                    </select>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1">Fecha Salida</label>
+                        <input type="date" id="alquiler-salida" required class="w-full p-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1">Fecha Retorno</label>
+                        <input type="date" id="alquiler-retorno" required class="w-full p-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                    </div>
+                </div>
+                <div>
+                    <div class="flex justify-between items-center mb-1">
+                        <label class="block text-xs font-semibold text-slate-500">Cantidad de Módulos a Alquilar</label>
+                        <span id="alquiler-stock-info" class="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-md">--</span>
+                    </div>
+                    <input type="number" id="alquiler-cantidad" required min="1" value="1" class="w-full p-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                </div>
+                
+                <div id="alquiler-error-container" class="hidden p-3 bg-rose-50 border border-rose-200 text-rose-700 text-[11px] rounded-xl flex items-start gap-2 animate-pulse">
+                    <i class="fa-solid fa-triangle-exclamation text-rose-500 mt-0.5 shrink-0 text-sm"></i>
+                    <div>
+                        <span class="font-bold block">Sin stock disponible para estas fechas</span>
+                        <span id="alquiler-error-text">No hay suficientes módulos disponibles de este modelo en el rango de fechas seleccionado.</span>
+                    </div>
+                </div>
+
+                <div class="p-3.5 bg-amber-50/60 rounded-xl border border-amber-100 space-y-1">
+                    <span class="text-[10px] uppercase font-bold text-amber-700 tracking-wider">Cálculo en vivo</span>
+                    <div class="flex justify-between text-slate-700 text-xs">
+                        <span>Neto estimado:</span>
+                        <span id="calculo-neto" class="font-semibold">$0.00</span>
+                    </div>
+                    <div class="flex justify-between text-slate-700 text-xs">
+                        <span>IVA (21%):</span>
+                        <span id="calculo-iva" class="font-semibold">$0.00</span>
+                    </div>
+                    <div class="flex justify-between text-slate-900 text-sm font-bold border-t border-amber-200/50 pt-1 mt-1">
+                        <span>Total c/IVA:</span>
+                        <span id="calculo-total">$0.00</span>
+                    </div>
+                </div>
+                
+                <div class="flex gap-3 pt-4">
+                    <button type="button" id="btn-cancel-alquiler" class="flex-1 py-2.5 border border-slate-200 text-slate-600 rounded-xl text-sm font-semibold hover:bg-slate-50 transition">Cancelar</button>
+                    <button type="submit" id="btn-submit-alquiler" class="flex-1 py-2.5 bg-amber-500 hover:bg-amber-600 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white rounded-xl text-sm font-semibold transition">Registrar Alquiler</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MÓDULOS DE CONEXIÓN CON FIREBASE -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot, addDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+
+        // Configuración de Firebase provista por el usuario
+        const firebaseConfig = {
+            apiKey: "AIzaSyBFiqebpKHF5I6GKCUBXqyReqR9RBGBqVw",
+            authDomain: "carpamanager.firebaseapp.com",
+            projectId: "carpamanager",
+            storageBucket: "carpamanager.firebasestorage.app",
+            messagingSenderId: "166771432874",
+            appId: "1:166771432874:web:2416f0a5ce39781b965fd3"
+        };
+
+        // Estado dinámico del modo de conexión (Cloud u Offline Local Storage)
+        let isLocalOnlyMode = false;
+
+        // Datos de simulación por defecto (con soporte "stock")
+        const defaultCarpas = [
+            { id: "CAR-001", tipo: "Estructural Premium", medidas: "12x24m", precio: 180000, estado: "Disponible", stock: 5 },
+            { id: "CAR-002", tipo: "Estructural Premium", medidas: "10x15m", precio: 140000, estado: "Disponible", stock: 8 },
+            { id: "CAR-003", tipo: "Gazebo Pro", medidas: "4x4m", precio: 45000, estado: "Disponible", stock: 15 },
+            { id: "CAR-004", tipo: "Carpa Domo", medidas: "Domo 8m", precio: 95000, estado: "Mantenimiento", stock: 3 }
+        ];
+
+        const defaultClientes = [
+            { id: 1, nombre: "Urban Proyectos Eventos S.A.", cuit: "30-58962541-2", tel: "1145896325", email: "eventos@urban.com.ar" },
+            { id: 2, nombre: "Municipalidad del Este", cuit: "33-71477720-9", tel: "2617485962", email: "compras@municipioeste.gov.ar" }
+        ];
+
+        const defaultAlquileres = [
+            { id: 101, clienteId: 1, carpaId: "CAR-002", cantidad: 3, salida: "2026-05-20", retorno: "2026-06-05", estado: "Activo", neto: 2160000, total: 2613600 }
+        ];
+
+        const defaultTiposCarpas = [
+            { nombre: "Estructural Premium" },
+            { nombre: "Gazebo Pro" },
+            { nombre: "Carpa Domo" },
+            { nombre: "Carpa Eventos Gigante" }
+        ];
+
+        // Inicializar variables Firebase de forma controlada
+        let app, auth, db;
+        const appId = "carpamanager";
+
+        // Rutas Firestore (Regla 1)
+        const carpasPath = `/artifacts/${appId}/public/data/carpas`;
+        const clientesPath = `/artifacts/${appId}/public/data/clientes`;
+        const alquileresPath = `/artifacts/${appId}/public/data/alquileres`;
+        const tiposPath = `/artifacts/${appId}/public/data/tiposCarpas`;
+
+        // Datos del Estado Local Sincronizado
+        let carpas = [];
+        let clientes = [];
+        let alquileres = [];
+        let tiposCarpas = [];
+        let currentUser = null;
+
+        // ELEMENTOS DOM
+        const loadingScreen = document.getElementById('loading-screen');
+        const loadingStatusText = document.getElementById('loading-status-text');
+        const btnBypassLoading = document.getElementById('btn-bypass-loading');
+        const dashboardRentalsTbody = document.getElementById('dashboard-rentals-tbody');
+        const inventarioTbody = document.getElementById('inventario-tbody');
+        const clientesTbody = document.getElementById('clientes-tbody');
+        const alquileresTbody = document.getElementById('alquileres-tbody');
+        const currentTabId = { active: 'dashboard' };
+
+        // CONFIGURAR ACCIÓN DEL BOTÓN DE BYPASS RÁPIDO A MODO LOCAL
+        btnBypassLoading.onclick = () => {
+            console.warn("Forzando bypass del loading a modo de contingencia local offline...");
+            activateLocalFallbackMode();
+        };
+
+        // INTENTO DE INICIALIZACIÓN DE FIREBASE CON CATCH DE ERRORES GRÁCIL
+        try {
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+
+            // AUTENTICACIÓN ANTES DE CONSULTAS (Regla 3)
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    currentUser = user;
+                    console.log("Autenticado exitosamente con ID:", user.uid);
+                    startRealtimeSync();
+                } else {
+                    try {
+                        await signInAnonymously(auth);
+                    } catch (error) {
+                        console.error("Error capturado en autenticación anónima:", error);
+                        handleAuthError(error);
+                    }
+                }
+            });
+        } catch (initializationError) {
+            console.error("Error crítico al inicializar Firebase:", initializationError);
+            handleAuthError(initializationError);
+        }
+
+        // CONTROLADOR DE ERRORES DE AUTENTICACIÓN O CONFIGURACIÓN
+        function handleAuthError(error) {
+            const spinnerBar = document.getElementById('loading-spinner-bar');
+            if (spinnerBar) spinnerBar.classList.add('hidden');
+
+            if (error.code === 'auth/configuration-not-found' || error.message?.includes('configuration-not-found')) {
+                loadingStatusText.innerHTML = `
+                    <span class="text-rose-400 font-bold block mb-1">¡Configuración Pendiente en Firebase!</span>
+                    <span class="text-[11px] leading-relaxed block text-slate-300">
+                        Debes activar el <b>"Proveedor Anónimo"</b> en tu consola de Firebase:<br>
+                        <i>Authentication -> Sign-in method -> Anónimo -> Habilitar y Guardar</i>.
+                    </span>
+                `;
+            } else {
+                loadingStatusText.innerText = "Error al conectar con la nube: " + (error.message || error);
+            }
+            btnBypassLoading.classList.remove('hidden');
+        }
+
+        // ACTIVAR MODO DE CONTINGENCIA LOCAL (OFFLINE STORAGE)
+        function activateLocalFallbackMode() {
+            isLocalOnlyMode = true;
+            console.log("Se activó el modo LocalStorage offline.");
+
+            // Cambiar los indicadores visuales a modo offline
+            document.getElementById('badge-connection-mode').innerText = "v3.0 - Offline";
+            document.getElementById('badge-connection-mode').className = "text-amber-400 text-xs font-semibold uppercase tracking-wider";
+            document.getElementById('led-connection-status').className = "w-2.5 h-2.5 rounded-full bg-amber-500 inline-block animate-pulse";
+            document.getElementById('text-connection-status').innerText = "Operando en Local";
+            document.getElementById('dashboard-banner-text').innerText = "Operando en modo de contingencia local. Los datos se guardan solo en este navegador.";
+
+            const cloudNetCard = document.getElementById('cloud-network-card');
+            if (cloudNetCard) {
+                cloudNetCard.className = "p-3 bg-amber-50 border border-amber-100 rounded-xl flex items-start gap-3";
+                cloudNetCard.innerHTML = `
+                    <i class="fa-solid fa-house-laptop text-amber-600 mt-1 text-sm shrink-0"></i>
+                    <div>
+                        <h5 class="text-slate-800 text-xs font-semibold">Modo Local Offline</h5>
+                        <p class="text-slate-500 text-[11px] mt-0.5">La autenticación de Firebase no está activa. Los datos se persisten en LocalStorage.</p>
+                    </div>
+                `;
+            }
+
+            // Cargar datos locales de LocalStorage o usar defaults
+            carpas = JSON.parse(localStorage.getItem('local_carpas')) || defaultCarpas;
+            clientes = JSON.parse(localStorage.getItem('local_clientes')) || defaultClientes;
+            alquileres = JSON.parse(localStorage.getItem('local_alquileres')) || defaultAlquileres;
+            tiposCarpas = JSON.parse(localStorage.getItem('local_tiposCarpas')) || defaultTiposCarpas;
+
+            // Asegurar que las llaves estén inicializadas localmente
+            saveToLocalStorage();
+
+            // Desvanecer el loading
+            loadingScreen.classList.add('opacity-0');
+            setTimeout(() => loadingScreen.classList.add('hidden'), 500);
+
+            // Render inicial de la interfaz
+            renderAll();
+        }
+
+        // GUARDADO DE SEGURIDAD EN LOCALSTORAGE
+        function saveToLocalStorage() {
+            if (!isLocalOnlyMode) return;
+            localStorage.setItem('local_carpas', JSON.stringify(carpas));
+            localStorage.setItem('local_clientes', JSON.stringify(clientes));
+            localStorage.setItem('local_alquileres', JSON.stringify(alquileres));
+            localStorage.setItem('local_tiposCarpas', JSON.stringify(tiposCarpas));
+        }
+
+        // ESCUCHAS EN TIEMPO REAL FIRESTORE
+        function startRealtimeSync() {
+            let loadedCounts = 0;
+            const totalToLoad = 4;
+
+            const checkInitialLoadComplete = () => {
+                loadedCounts++;
+                if (loadedCounts >= totalToLoad) {
+                    loadingScreen.classList.add('opacity-0');
+                    setTimeout(() => loadingScreen.classList.add('hidden'), 500);
+                    renderAll();
+                }
+            };
+
+            // Escuchar Carpas
+            onSnapshot(collection(db, carpasPath), (snapshot) => {
+                if (isLocalOnlyMode) return;
+                carpas = [];
+                snapshot.forEach(doc => {
+                    carpas.push({ docId: doc.id, ...doc.data() });
+                });
+                renderAll();
+                if (loadedCounts < totalToLoad) checkInitialLoadComplete();
+            }, (error) => {
+                console.error("Error al escuchar Carpas:", error);
+                activateLocalFallbackMode();
+            });
+
+            // Escuchar Clientes
+            onSnapshot(collection(db, clientesPath), (snapshot) => {
+                if (isLocalOnlyMode) return;
+                clientes = [];
+                snapshot.forEach(doc => {
+                    clientes.push({ docId: doc.id, ...doc.data() });
+                });
+                renderAll();
+                if (loadedCounts < totalToLoad) checkInitialLoadComplete();
+            }, (error) => {
+                console.error("Error al escuchar Clientes:", error);
+                activateLocalFallbackMode();
+            });
+
+            // Escuchar Alquileres
+            onSnapshot(collection(db, alquileresPath), (snapshot) => {
+                if (isLocalOnlyMode) return;
+                alquileres = [];
+                snapshot.forEach(doc => {
+                    alquileres.push({ docId: doc.id, ...doc.data() });
+                });
+                renderAll();
+                if (loadedCounts < totalToLoad) checkInitialLoadComplete();
+            }, (error) => {
+                console.error("Error al escuchar Alquileres:", error);
+                activateLocalFallbackMode();
+            });
+
+            // Escuchar Categorías de Carpas
+            onSnapshot(collection(db, tiposPath), (snapshot) => {
+                if (isLocalOnlyMode) return;
+                tiposCarpas = [];
+                snapshot.forEach(doc => {
+                    tiposCarpas.push({ docId: doc.id, ...doc.data() });
+                });
+                renderAll();
+                if (loadedCounts < totalToLoad) checkInitialLoadComplete();
+            }, (error) => {
+                console.error("Error al escuchar Categorías:", error);
+                activateLocalFallbackMode();
+            });
+        }
+
+        // CARGA DE VALORES DEMO DE FÁBRICA (CLOUD O LOCAL)
+        async function seedDatabaseDemo() {
+            if (!isLocalOnlyMode && !currentUser) return;
+            
+            showDecisionAlert(
+                "Restaurar Datos Demo", 
+                "Esto agregará un lote inicial de datos para demostración. ¿Deseas continuar?", 
+                async () => {
+                    if (isLocalOnlyMode) {
+                        carpas = [...defaultCarpas];
+                        clientes = [...defaultClientes];
+                        alquileres = [...defaultAlquileres];
+                        tiposCarpas = [...defaultTiposCarpas];
+                        saveToLocalStorage();
+                        renderAll();
+                        showSimpleAlert("¡Datos demo cargados en modo local!");
+                        return;
+                    }
+
+                    loadingScreen.classList.remove('hidden');
+                    loadingScreen.classList.remove('opacity-0');
+
+                    try {
+                        // 1. Tipos de Carpas
+                        for (let t of defaultTiposCarpas) {
+                            await addDoc(collection(db, tiposPath), { nombre: t.nombre });
+                        }
+
+                        // 2. Carpas
+                        for (let c of defaultCarpas) {
+                            await addDoc(collection(db, carpasPath), c);
+                        }
+
+                        // 3. Clientes
+                        for (let cl of defaultClientes) {
+                            await addDoc(collection(db, clientesPath), cl);
+                        }
+
+                        // 4. Alquileres
+                        for (let al of defaultAlquileres) {
+                            await addDoc(collection(db, alquileresPath), al);
+                        }
+
+                        showSimpleAlert("¡Datos demo cargados exitosamente en la nube!");
+                    } catch (e) {
+                        console.error(e);
+                        showSimpleAlert("Error al insertar los datos de demostración.");
+                    } finally {
+                        loadingScreen.classList.add('opacity-0');
+                        setTimeout(() => loadingScreen.classList.add('hidden'), 500);
+                    }
+                }
+            );
+        }
+
+        // LÓGICA DE ACTUALIZACIÓN DE INTERFAZ GENERAL
+        function renderAll() {
+            updateCarpaStatuses();
+            updateStats();
+            renderDashboard();
+            renderInventario();
+            renderClientes();
+            renderAlquileres();
+            populateSelects();
+        }
+
+        function updateCarpaStatuses() {
+            const hoy = new Date();
+            hoy.setHours(0,0,0,0);
+
+            carpas.forEach(c => {
+                if (c.estado !== 'Mantenimiento') {
+                    c.estado = 'Disponible';
+                }
+            });
+
+            carpas.forEach(c => {
+                if (c.estado !== 'Mantenimiento') {
+                    let modulesRentedToday = 0;
+                    alquileres.forEach(a => {
+                        if (a.estado === 'Activo' && a.carpaId === c.id) {
+                            const start = new Date(a.salida + "T00:00:00");
+                            const end = new Date(a.retorno + "T00:00:00");
+                            if (hoy >= start && hoy <= end) {
+                                modulesRentedToday += (parseInt(a.cantidad) || 1);
+                            }
+                        }
+                    });
+
+                    if (modulesRentedToday >= c.stock) {
+                        c.estado = 'Alquilada';
+                    } else if (modulesRentedToday > 0) {
+                        c.estado = 'Alquilada (Parcial)';
+                    }
+                }
+            });
+        }
+
+        function updateStats() {
+            const hoy = new Date();
+            const hoyStr = hoy.toISOString().split('T')[0];
+            
+            let disponiblesHoy = 0;
+            carpas.forEach(c => {
+                if (c.estado !== 'Mantenimiento') {
+                    disponiblesHoy += getAvailableStock(c.id, hoyStr, hoyStr);
+                }
+            });
+
+            const activos = alquileres.filter(a => a.estado === 'Activo').length;
+            const demorados = alquileres.filter(a => {
+                return a.estado === 'Activo' && new Date(a.retorno + "T00:00:00") < hoy;
+            }).length;
+
+            const totalFacturado = alquileres.reduce((acc, curr) => acc + curr.total, 0);
+
+            const dispEl = document.getElementById('stat-disponibles');
+            const actEl = document.getElementById('stat-activos');
+            const demEl = document.getElementById('stat-demorados');
+            const ingEl = document.getElementById('stat-ingresos');
+
+            if (dispEl) dispEl.innerText = disponiblesHoy;
+            if (actEl) actEl.innerText = activos;
+            if (demEl) demEl.innerText = demorados;
+            if (ingEl) ingEl.innerText = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(totalFacturado);
+        }
+
+        // CÁLCULO DE DISPONIBILIDAD TEMPORAL DE STOCK
+        function getAvailableStock(carpaId, salidaStr, retornoStr, excludeAlquilerId = null) {
+            if (!carpaId || !salidaStr || !retornoStr) return 0;
+            
+            const selectedCarpa = carpas.find(c => c.id === carpaId);
+            if (!selectedCarpa) return 0;
+            if (selectedCarpa.estado === 'Mantenimiento') return 0;
+            
+            const totalStock = parseInt(selectedCarpa.stock) || 1;
+            const startNew = new Date(salidaStr + "T00:00:00");
+            const endNew = new Date(retornoStr + "T00:00:00");
+            
+            let rentedModules = 0;
+            alquileres.forEach(a => {
+                if (a.estado === 'Activo' && a.id !== excludeAlquilerId && a.carpaId === carpaId) {
+                    const startOld = new Date(a.salida + "T00:00:00");
+                    const endOld = new Date(a.retorno + "T00:00:00");
+                    const overlaps = (startOld <= endNew) && (endOld >= startNew);
+                    if (overlaps) {
+                        rentedModules += (parseInt(a.cantidad) || 1);
+                    }
+                }
+            });
+            
+            return Math.max(0, totalStock - rentedModules);
+        }
+
+        // RENDERS DE PESTAÑAS
+        function renderDashboard() {
+            dashboardRentalsTbody.innerHTML = '';
+            const sorted = [...alquileres].reverse().slice(0, 3);
+            
+            if (sorted.length === 0) {
+                dashboardRentalsTbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-slate-400 text-xs">No hay alquileres registrados.</td></tr>`;
+                return;
+            }
+
+            sorted.forEach(a => {
+                const cli = clientes.find(c => c.id === parseInt(a.clienteId)) || { nombre: 'Desconocido' };
+                const carp = carpas.find(c => c.id === a.carpaId) || { tipo: 'Desconocido', medidas: '' };
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-slate-50 hover:bg-slate-50/50 transition text-slate-700';
+                
+                let stateBadge = '';
+                if (a.estado === 'Activo') {
+                    const esVencido = new Date(a.retorno + "T00:00:00") < new Date();
+                    stateBadge = esVencido 
+                        ? `<span class="bg-rose-50 text-rose-600 text-xs px-2.5 py-1 rounded-full font-semibold flex items-center gap-1.5 w-max"><span class="w-1.5 h-1.5 rounded-full bg-rose-500 inline-block animate-pulse"></span>Vencido</span>`
+                        : `<span class="bg-indigo-50 text-indigo-600 text-xs px-2.5 py-1 rounded-full font-semibold flex items-center gap-1.5 w-max">Activo</span>`;
+                } else {
+                    stateBadge = `<span class="bg-emerald-50 text-emerald-600 text-xs px-2.5 py-1 rounded-full font-semibold flex items-center gap-1.5 w-max">Completado</span>`;
+                }
+
+                const displayQty = a.cantidad && a.cantidad > 0 ? `${a.cantidad} mód. de ` : '1 mód. de ';
+
+                tr.innerHTML = `
+                    <td class="py-4 font-semibold text-slate-900 truncate max-w-[120px]">${cli.nombre}</td>
+                    <td class="py-4 text-slate-500 text-xs"><span class="text-indigo-600 font-bold font-mono">${displayQty}</span>${carp.tipo}</td>
+                    <td class="py-4 text-slate-500 font-mono text-xs">${formatDate(a.retorno)}</td>
+                    <td class="py-4">${stateBadge}</td>
+                    <td class="py-4 text-right font-bold text-slate-800">${new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(a.total)}</td>
+                `;
+                dashboardRentalsTbody.appendChild(tr);
+            });
+        }
+
+        function renderInventario() {
+            const search = document.getElementById('search-inventario').value.toLowerCase();
+            inventarioTbody.innerHTML = '';
+
+            const filtered = carpas.filter(c => 
+                c.id.toLowerCase().includes(search) || 
+                c.tipo.toLowerCase().includes(search) || 
+                c.medidas.toLowerCase().includes(search)
+            );
+
+            if (filtered.length === 0) {
+                inventarioTbody.innerHTML = `<tr><td colspan="7" class="p-8 text-center text-slate-400 text-sm">No se encontraron carpas o módulos.</td></tr>`;
+                return;
+            }
+
+            filtered.forEach(c => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50/50 transition text-slate-700';
+
+                let badge = '';
+                if (c.estado === 'Disponible') badge = `<span class="bg-emerald-50 text-emerald-700 text-xs px-2.5 py-1 rounded-full font-semibold border border-emerald-100">Disponible</span>`;
+                if (c.estado === 'Alquilada') badge = `<span class="bg-rose-50 text-rose-700 text-xs px-2.5 py-1 rounded-full font-semibold border border-rose-100">Alquilada</span>`;
+                if (c.estado === 'Alquilada (Parcial)') badge = `<span class="bg-indigo-50 text-indigo-700 text-xs px-2.5 py-1 rounded-full font-semibold border border-indigo-100">Uso Parcial</span>`;
+                if (c.estado === 'Mantenimiento') badge = `<span class="bg-amber-50 text-amber-700 text-xs px-2.5 py-1 rounded-full font-semibold border border-amber-100">Mantenimiento</span>`;
+
+                tr.innerHTML = `
+                    <td class="p-4 font-mono font-bold text-slate-800">${c.id}</td>
+                    <td class="p-4 font-semibold text-slate-900">${c.tipo}</td>
+                    <td class="p-4 text-slate-500">${c.medidas}</td>
+                    <td class="p-4 font-medium text-slate-800">${new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(c.precio)}</td>
+                    <td class="p-4"><span class="bg-slate-100 text-slate-800 text-xs font-bold px-3 py-1 rounded-lg border border-slate-200 font-mono">${c.stock || 1} Mód.</span></td>
+                    <td class="p-4">${badge}</td>
+                    <td class="p-4 text-right flex justify-end gap-1.5">
+                        <button data-id="${isLocalOnlyMode ? c.id : c.docId}" data-action="disponible" class="btn-action-carpa p-2 hover:bg-emerald-50 text-emerald-600 rounded-lg text-sm transition" title="Marcar Operativo"><i class="fa-solid fa-check"></i></button>
+                        <button data-id="${isLocalOnlyMode ? c.id : c.docId}" data-action="mantenimiento" class="btn-action-carpa p-2 hover:bg-amber-50 text-amber-500 rounded-lg text-sm transition" title="Marcar Mantenimiento"><i class="fa-solid fa-soap"></i></button>
+                        <button data-id="${isLocalOnlyMode ? c.id : c.docId}" data-action="eliminar" class="btn-action-carpa p-2 hover:bg-rose-50 text-rose-500 rounded-lg text-sm transition" title="Eliminar"><i class="fa-solid fa-trash-can"></i></button>
+                    </td>
+                `;
+                inventarioTbody.appendChild(tr);
+            });
+
+            // Registrar listeners para las acciones de inventario
+            document.querySelectorAll('.btn-action-carpa').forEach(btn => {
+                btn.onclick = async (e) => {
+                    const identifier = btn.getAttribute('data-id');
+                    const action = btn.getAttribute('data-action');
+                    
+                    if (isLocalOnlyMode) {
+                        const targetCarpa = carpas.find(c => c.id === identifier);
+                        if (targetCarpa) {
+                            if (action === 'disponible') targetCarpa.estado = 'Disponible';
+                            else if (action === 'mantenimiento') targetCarpa.estado = 'Mantenimiento';
+                            else if (action === 'eliminar') {
+                                showDecisionAlert("Eliminar Carpa", "¿Estás seguro de quitar este producto del stock?", () => {
+                                    carpas = carpas.filter(c => c.id !== identifier);
+                                    saveToLocalStorage();
+                                    renderAll();
+                                });
+                                return;
+                            }
+                            saveToLocalStorage();
+                            renderAll();
+                        }
+                    } else {
+                        if (action === 'disponible') {
+                            await updateDoc(doc(db, carpasPath, identifier), { estado: 'Disponible' });
+                        } else if (action === 'mantenimiento') {
+                            await updateDoc(doc(db, carpasPath, identifier), { estado: 'Mantenimiento' });
+                        } else if (action === 'eliminar') {
+                            showDecisionAlert("Eliminar Carpa", "¿Estás seguro de quitar este producto del stock?", async () => {
+                                await deleteDoc(doc(db, carpasPath, identifier));
+                            });
+                        }
+                    }
+                };
+            });
+        }
+
+        function renderTiposCarpas() {
+            const listContainer = document.getElementById('lista-tipos-carpa');
+            listContainer.innerHTML = '';
+
+            if (tiposCarpas.length === 0) {
+                listContainer.innerHTML = `<li class="p-4 text-center text-slate-400 text-xs">No hay categorías cargadas.</li>`;
+                return;
+            }
+
+            tiposCarpas.forEach((t) => {
+                const li = document.createElement('li');
+                li.className = 'flex items-center justify-between p-3 bg-white text-sm text-slate-700 transition hover:bg-slate-50';
+                
+                const enUso = carpas.some(c => c.tipo === t.nombre);
+
+                li.innerHTML = `
+                    <span class="font-medium text-slate-800">${t.nombre}</span>
+                    <button type="button" data-id="${isLocalOnlyMode ? t.nombre : t.docId}" data-name="${t.nombre}" 
+                        class="btn-delete-tipo p-1.5 hover:bg-rose-50 text-rose-500 rounded-lg text-xs transition ${enUso ? 'opacity-30 cursor-not-allowed' : ''}" 
+                        ${enUso ? 'disabled title="No se puede eliminar porque hay carpas de este tipo en inventario"' : 'title="Eliminar Tipo"'}>
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                `;
+                listContainer.appendChild(li);
+            });
+
+            document.querySelectorAll('.btn-delete-tipo').forEach(btn => {
+                btn.onclick = async () => {
+                    const identifier = btn.getAttribute('data-id');
+                    const name = btn.getAttribute('data-name');
+                    if (carpas.some(c => c.tipo === name)) {
+                        showSimpleAlert("No es posible eliminar un tipo que esté en uso.");
+                        return;
+                    }
+                    
+                    if (isLocalOnlyMode) {
+                        tiposCarpas = tiposCarpas.filter(t => t.nombre !== name);
+                        saveToLocalStorage();
+                        renderAll();
+                    } else {
+                        await deleteDoc(doc(db, tiposPath, identifier));
+                    }
+                };
+            });
+        }
+
+        function renderClientes() {
+            const search = document.getElementById('search-clientes').value.toLowerCase();
+            clientesTbody.innerHTML = '';
+
+            const filtered = clientes.filter(c => 
+                c.nombre.toLowerCase().includes(search) || 
+                c.cuit.includes(search)
+            );
+
+            if (filtered.length === 0) {
+                clientesTbody.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-slate-400 text-sm">No se encontraron clientes registrados.</td></tr>`;
+                return;
+            }
+
+            filtered.forEach(c => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50/50 transition text-slate-700';
+                tr.innerHTML = `
+                    <td class="p-4 font-mono text-slate-400">#${c.id}</td>
+                    <td class="p-4 font-semibold text-slate-900">${c.nombre}</td>
+                    <td class="p-4 font-mono text-slate-500">${c.cuit}</td>
+                    <td class="p-4 text-slate-500">${c.tel}</td>
+                    <td class="p-4 text-slate-500">${c.email}</td>
+                    <td class="p-4 text-right">
+                        <button data-id="${isLocalOnlyMode ? c.id : c.docId}" class="btn-delete-cliente p-2 hover:bg-rose-50 text-rose-500 rounded-lg text-sm transition" title="Eliminar"><i class="fa-solid fa-trash-can"></i></button>
+                    </td>
+                `;
+                clientesTbody.appendChild(tr);
+            });
+
+            document.querySelectorAll('.btn-delete-cliente').forEach(btn => {
+                btn.onclick = () => {
+                    const identifier = btn.getAttribute('data-id');
+                    showDecisionAlert("Eliminar Cliente", "¿Estás seguro de eliminar este cliente? Se conservará su historial de alquileres.", async () => {
+                        if (isLocalOnlyMode) {
+                            clientes = clientes.filter(c => c.id !== parseInt(identifier));
+                            saveToLocalStorage();
+                            renderAll();
+                        } else {
+                            await deleteDoc(doc(db, clientesPath, identifier));
+                        }
+                    });
+                };
+            });
+        }
+
+        function renderAlquileres() {
+            const search = document.getElementById('search-alquileres').value.toLowerCase();
+            alquileresTbody.innerHTML = '';
+
+            const filtered = alquileres.filter(a => {
+                const cli = clientes.find(c => c.id === parseInt(a.clienteId)) || { nombre: '' };
+                const carp = carpas.find(c => c.id === a.carpaId) || { tipo: '' };
+                return cli.nombre.toLowerCase().includes(search) || carp.tipo.toLowerCase().includes(search);
+            });
+
+            if (filtered.length === 0) {
+                alquileresTbody.innerHTML = `<tr><td colspan="10" class="p-8 text-center text-slate-400 text-sm">No se encontraron alquileres en el sistema.</td></tr>`;
+                return;
+            }
+
+            filtered.forEach(a => {
+                const cli = clientes.find(c => c.id === parseInt(a.clienteId)) || { nombre: 'Desconocido' };
+                const carp = carpas.find(c => c.id === a.carpaId) || { tipo: 'Desconocido', medidas: '', stock: 1 };
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-50/50 transition text-slate-700';
+
+                let badge = '';
+                if (a.estado === 'Activo') {
+                    const esVencido = new Date(a.retorno + "T00:00:00") < new Date();
+                    badge = esVencido 
+                        ? `<span class="bg-rose-50 text-rose-600 text-xs px-2.5 py-1 rounded-full font-semibold border border-rose-100 flex items-center gap-1.5 w-max"><span class="w-1.5 h-1.5 rounded-full bg-rose-500 inline-block animate-pulse"></span>Vencido</span>`
+                        : `<span class="bg-indigo-50 text-indigo-600 text-xs px-2.5 py-1 rounded-full font-semibold border border-indigo-100 flex items-center gap-1.5 w-max">Activo</span>`;
+                } else {
+                    badge = `<span class="bg-emerald-50 text-emerald-600 text-xs px-2.5 py-1 rounded-full font-semibold border border-emerald-100 flex items-center gap-1.5 w-max">Completado</span>`;
+                }
+
+                const displayQty = a.cantidad && a.cantidad > 0 ? `${a.cantidad} Módulos` : '1 Módulo';
+
+                tr.innerHTML = `
+                    <td class="p-4 font-mono font-bold text-slate-800">#${a.id}</td>
+                    <td class="p-4 font-semibold text-slate-900">${cli.nombre}</td>
+                    <td class="p-4 text-slate-500">${carp.id} - ${carp.tipo} (${carp.medidas})</td>
+                    <td class="p-4 font-semibold text-indigo-600 font-mono">${displayQty} <span class="text-slate-400 font-normal">/ max ${carp.stock || 1}</span></td>
+                    <td class="p-4 font-mono text-xs text-slate-500">${formatDate(a.salida)}</td>
+                    <td class="p-4 font-mono text-xs text-slate-500">${formatDate(a.retorno)}</td>
+                    <td class="p-4">${badge}</td>
+                    <td class="p-4 font-medium text-slate-800">${new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(a.neto)}</td>
+                    <td class="p-4 font-bold text-slate-900">${new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(a.total)}</td>
+                    <td class="p-4 text-right flex justify-end gap-2">
+                        ${a.estado === 'Activo' ? `<button data-id="${isLocalOnlyMode ? a.id : a.docId}" class="btn-return-alquiler py-1 px-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-lg text-xs font-semibold flex items-center gap-1 transition shadow-sm" title="Registrar Retorno"><i class="fa-solid fa-truck-ramp-box"></i> Retorno</button>` : ''}
+                        <button data-id="${isLocalOnlyMode ? a.id : a.docId}" class="btn-delete-alquiler p-2 hover:bg-rose-50 text-rose-500 rounded-lg text-sm transition" title="Eliminar"><i class="fa-solid fa-trash-can"></i></button>
+                    </td>
+                `;
+                alquileresTbody.appendChild(tr);
+            });
+
+            document.querySelectorAll('.btn-return-alquiler').forEach(btn => {
+                btn.onclick = async () => {
+                    const identifier = btn.getAttribute('data-id');
+                    if (isLocalOnlyMode) {
+                        const targetRent = alquileres.find(a => a.id === parseInt(identifier));
+                        if (targetRent) targetRent.estado = 'Completado';
+                        saveToLocalStorage();
+                        renderAll();
+                    } else {
+                        await updateDoc(doc(db, alquileresPath, identifier), { estado: 'Completado' });
+                    }
+                };
+            });
+
+            document.querySelectorAll('.btn-delete-alquiler').forEach(btn => {
+                btn.onclick = () => {
+                    const identifier = btn.getAttribute('data-id');
+                    showDecisionAlert("Eliminar Alquiler", "¿Deseas borrar este registro de alquiler?", async () => {
+                        if (isLocalOnlyMode) {
+                            alquileres = alquileres.filter(a => a.id !== parseInt(identifier));
+                            saveToLocalStorage();
+                            renderAll();
+                        } else {
+                            await deleteDoc(doc(db, alquileresPath, identifier));
+                        }
+                    });
+                };
+            });
+        }
+
+        function populateSelects() {
+            const selCarpaTipo = document.getElementById('carpa-tipo');
+            if (selCarpaTipo) {
+                selCarpaTipo.innerHTML = '';
+                tiposCarpas.forEach(t => {
+                    selCarpaTipo.innerHTML += `<option value="${t.nombre}">${t.nombre}</option>`;
+                });
+            }
+
+            const selCliente = document.getElementById('alquiler-cliente');
+            if (selCliente) {
+                selCliente.innerHTML = '<option value="">-- Seleccionar un Cliente --</option>';
+                clientes.forEach(c => {
+                    selCliente.innerHTML += `<option value="${c.id}">${c.nombre} (CUIT: ${c.cuit})</option>`;
+                });
+            }
+
+            const selCarpa = document.getElementById('alquiler-carpa');
+            if (selCarpa) {
+                selCarpa.innerHTML = '<option value="">-- Seleccionar Carpa / Estructura --</option>';
+                carpas.filter(c => c.estado !== 'Mantenimiento').forEach(c => {
+                    selCarpa.innerHTML += `<option value="${c.id}">${c.id} - ${c.tipo} (${c.medidas}) [Stock: ${c.stock || 1}]</option>`;
+                });
+            }
+        }
+
+        // CONTROL DE FORMULARIOS Y CÁLCULOS DINÁMICOS
+        const errorContainer = document.getElementById('alquiler-error-container');
+        const errorText = document.getElementById('alquiler-error-text');
+        const btnSubmitAlquiler = document.getElementById('btn-submit-alquiler');
+        const stockInfoSpan = document.getElementById('alquiler-stock-info');
+
+        const updateFormState = () => {
+            const carpaId = document.getElementById('alquiler-carpa').value;
+            const fSalida = document.getElementById('alquiler-salida').value;
+            const fRetorno = document.getElementById('alquiler-retorno').value;
+            const cantidadVal = parseInt(document.getElementById('alquiler-cantidad').value) || 1;
+
+            if (carpaId && fSalida && fRetorno) {
+                const carpa = carpas.find(c => c.id === carpaId);
+                const fechaS = new Date(fSalida + "T00:00:00");
+                const fechaR = new Date(fRetorno + "T00:00:00");
+
+                const diffTime = Math.abs(fechaR - fechaS);
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
+
+                const neto = carpa.precio * diffDays * cantidadVal;
+                const iva = neto * 0.21;
+                const total = neto + iva;
+
+                document.getElementById('calculo-neto').innerText = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(neto);
+                document.getElementById('calculo-iva').innerText = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(iva);
+                document.getElementById('calculo-total').innerText = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(total);
+
+                const disponibles = getAvailableStock(carpaId, fSalida, fRetorno);
+                stockInfoSpan.innerText = `Libres: ${disponibles} de ${carpa.stock} mód.`;
+
+                if (cantidadVal > disponibles) {
+                    errorText.innerText = `Solo disponés de ${disponibles} módulos libres de la carpa "${carpa.id}" para el período seleccionado.`;
+                    errorContainer.classList.remove('hidden');
+                    btnSubmitAlquiler.disabled = true;
+                } else {
+                    errorContainer.classList.add('hidden');
+                    btnSubmitAlquiler.disabled = false;
+                }
+            } else {
+                btnSubmitAlquiler.disabled = false;
+                errorContainer.classList.add('hidden');
+                stockInfoSpan.innerText = "--";
+            }
+        };
+
+        // EVENTOS DE NAVEGACIÓN Y MENÚS
+        const sidebar = document.getElementById('sidebar');
+        const backdrop = document.getElementById('sidebar-backdrop');
+
+        function toggleMobileMenu() {
+            if (sidebar.classList.contains('-translate-x-full')) {
+                sidebar.classList.remove('-translate-x-full');
+                backdrop.classList.remove('hidden');
+                setTimeout(() => backdrop.classList.add('opacity-100'), 10);
+            } else {
+                sidebar.classList.add('-translate-x-full');
+                backdrop.classList.remove('opacity-100');
+                backdrop.classList.add('opacity-0');
+                setTimeout(() => backdrop.classList.add('hidden'), 300);
+            }
+        }
+
+        document.getElementById('btn-open-sidebar').onclick = toggleMobileMenu;
+        document.getElementById('btn-close-sidebar').onclick = toggleMobileMenu;
+        backdrop.onclick = toggleMobileMenu;
+
+        function switchTab(tabId) {
+            currentTabId.active = tabId;
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.add('hidden'));
+            document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('bg-slate-800', 'text-emerald-400');
+                btn.classList.add('text-slate-400', 'hover:bg-slate-800/50', 'hover:text-white');
+            });
+
+            const activeBtn = document.getElementById(`btn-tab-${tabId}`);
+            if (activeBtn) {
+                activeBtn.classList.remove('text-slate-400', 'hover:bg-slate-800/50', 'hover:text-white');
+                activeBtn.classList.add('bg-slate-800', 'text-emerald-400');
+            }
+
+            const titleMap = {
+                'dashboard': 'Resumen de Operaciones',
+                'inventario': 'Inventario de Carpas & Módulos',
+                'clientes': 'Fichas de Clientes Registrados',
+                'alquileres': 'Control Integrado de Alquileres'
+            };
+            document.getElementById('main-title').innerText = titleMap[tabId] || 'Gestión de Alquileres';
+            
+            if (window.innerWidth < 768) {
+                toggleMobileMenu();
+            }
+            renderAll();
+        }
+
+        document.getElementById('btn-tab-dashboard').onclick = () => switchTab('dashboard');
+        document.getElementById('btn-tab-inventario').onclick = () => switchTab('inventario');
+        document.getElementById('btn-tab-clientes').onclick = () => switchTab('clientes');
+        document.getElementById('btn-tab-alquileres').onclick = () => switchTab('alquileres');
+        document.getElementById('btn-goto-alquileres').onclick = () => switchTab('alquileres');
+
+        // EVENTOS PARA BUSCADORES
+        document.getElementById('search-inventario').oninput = renderInventario;
+        document.getElementById('search-clientes').oninput = renderClientes;
+        document.getElementById('search-alquileres').oninput = renderAlquileres;
+
+        // ACCIONES DE FORMULARIOS
+        document.getElementById('form-carpa').onsubmit = async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('carpa-id').value.toUpperCase().trim();
+            const tipo = document.getElementById('carpa-tipo').value;
+            const medidas = document.getElementById('carpa-medidas').value.trim();
+            const precio = parseFloat(document.getElementById('carpa-precio').value);
+            const stock = parseInt(document.getElementById('carpa-stock').value) || 1;
+
+            if (carpas.some(c => c.id === id)) {
+                showSimpleAlert("El código de carpa ya existe en el stock.");
+                return;
+            }
+
+            if (isLocalOnlyMode) {
+                carpas.push({ id, tipo, medidas, precio, estado: "Disponible", stock });
+                saveToLocalStorage();
+                renderAll();
+            } else {
+                await addDoc(collection(db, carpasPath), { id, tipo, medidas, precio, estado: "Disponible", stock });
+            }
+            closeModal('modal-carpa');
+            document.getElementById('form-carpa').reset();
+        };
+
+        document.getElementById('form-cliente').onsubmit = async (e) => {
+            e.preventDefault();
+            const nombre = document.getElementById('cliente-nombre').value.trim();
+            const cuit = document.getElementById('cliente-cuit').value.trim();
+            const tel = document.getElementById('cliente-tel').value.trim();
+            const email = document.getElementById('cliente-email').value.trim();
+
+            const newId = clientes.length > 0 ? Math.max(...clientes.map(c => c.id)) + 1 : 1;
+
+            if (isLocalOnlyMode) {
+                clientes.push({ id: newId, nombre, cuit, tel, email });
+                saveToLocalStorage();
+                renderAll();
+            } else {
+                await addDoc(collection(db, clientesPath), { id: newId, nombre, cuit, tel, email });
+            }
+            closeModal('modal-cliente');
+            document.getElementById('form-cliente').reset();
+        };
+
+        document.getElementById('form-alquiler').onsubmit = async (e) => {
+            e.preventDefault();
+            const clienteId = parseInt(document.getElementById('alquiler-cliente').value);
+            const carpaId = document.getElementById('alquiler-carpa').value;
+            const cantidad = parseInt(document.getElementById('alquiler-cantidad').value) || 1;
+            const salida = document.getElementById('alquiler-salida').value;
+            const retorno = document.getElementById('alquiler-retorno').value;
+
+            const carpa = carpas.find(c => c.id === carpaId);
+            const fechaS = new Date(salida + "T00:00:00");
+            const fechaR = new Date(retorno + "T00:00:00");
+
+            if (fechaR <= fechaS) {
+                showSimpleAlert("La fecha de retorno debe ser posterior a la de salida.");
+                return;
+            }
+
+            const disponibles = getAvailableStock(carpaId, salida, retorno);
+            if (cantidad > disponibles) {
+                showSimpleAlert("No hay suficiente stock en las fechas seleccionadas.");
+                return;
+            }
+
+            const diffTime = Math.abs(fechaR - fechaS);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+            const neto = carpa.precio * diffDays * cantidad;
+            const total = neto * 1.21;
+            const newId = alquileres.length > 0 ? Math.max(...alquileres.map(a => a.id)) + 1 : 101;
+
+            if (isLocalOnlyMode) {
+                alquileres.push({
+                    id: newId,
+                    clienteId,
+                    carpaId,
+                    cantidad,
+                    salida,
+                    retorno,
+                    estado: "Activo",
+                    neto,
+                    total
+                });
+                saveToLocalStorage();
+                renderAll();
+            } else {
+                await addDoc(collection(db, alquileresPath), {
+                    id: newId,
+                    clienteId,
+                    carpaId,
+                    cantidad,
+                    salida,
+                    retorno,
+                    estado: "Activo",
+                    neto,
+                    total
+                });
+            }
+
+            closeModal('modal-alquiler');
+            document.getElementById('form-alquiler').reset();
+            document.getElementById('alquiler-cantidad').value = 1;
+        };
+
+        document.getElementById('form-nuevo-tipo').onsubmit = async (e) => {
+            e.preventDefault();
+            const input = document.getElementById('nuevo-tipo-input');
+            const nuevoTipo = input.value.trim();
+
+            if (nuevoTipo === '') return;
+            if (tiposCarpas.some(t => t.nombre.toLowerCase() === nuevoTipo.toLowerCase())) {
+                showSimpleAlert("Este tipo de carpa ya existe.");
+                return;
+            }
+
+            if (isLocalOnlyMode) {
+                tiposCarpas.push({ nombre: nuevoTipo });
+                saveToLocalStorage();
+                renderAll();
+            } else {
+                await addDoc(collection(db, tiposPath), { nombre: nuevoTipo });
+            }
+            input.value = '';
+            renderTiposCarpas();
+        };
+
+        // ENLACE DE EVENTOS DE MODALES
+        document.getElementById('btn-open-carpa-modal').onclick = () => {
+            openModal('modal-carpa');
+            populateSelects();
+        };
+        document.getElementById('btn-close-carpa-modal').onclick = () => closeModal('modal-carpa');
+        document.getElementById('btn-cancel-carpa').onclick = () => closeModal('modal-carpa');
+
+        document.getElementById('btn-open-categories').onclick = () => {
+            openModal('modal-tipos-carpa');
+            renderTiposCarpas();
+        };
+        document.getElementById('btn-close-categories').onclick = () => closeModal('modal-tipos-carpa');
+        document.getElementById('btn-back-categories').onclick = () => closeModal('modal-tipos-carpa');
+
+        document.getElementById('btn-open-cliente-modal').onclick = () => openModal('modal-cliente');
+        document.getElementById('btn-close-cliente-modal').onclick = () => closeModal('modal-cliente');
+        document.getElementById('btn-cancel-cliente').onclick = () => closeModal('modal-cliente');
+
+        document.getElementById('btn-open-alquiler-modal').onclick = () => {
+            openModal('modal-alquiler');
+            populateSelects();
+        };
+        document.getElementById('btn-close-alquiler-modal').onclick = () => closeModal('modal-alquiler');
+        document.getElementById('btn-cancel-alquiler').onclick = () => closeModal('modal-alquiler');
+
+        document.getElementById('btn-seed-data').onclick = seedDatabaseDemo;
+
+        // LISTENERS PARA CÁLCULO DE FORMULARIO DE ALQUILER
+        document.getElementById('alquiler-carpa').addEventListener('change', updateFormState);
+        document.getElementById('alquiler-cantidad').addEventListener('input', updateFormState);
+        document.getElementById('alquiler-salida').addEventListener('change', updateFormState);
+        document.getElementById('alquiler-retorno').addEventListener('change', updateFormState);
+
+        function openModal(id) {
+            document.getElementById(id).classList.remove('hidden');
+            if (id === 'modal-alquiler') {
+                errorContainer.classList.add('hidden');
+                btnSubmitAlquiler.disabled = false;
+                stockInfoSpan.innerText = "--";
+            }
+        }
+        function closeModal(id) {
+            document.getElementById(id).classList.add('hidden');
+        }
+
+        // SISTEMA DE ALERTAS PERSONALIZADO SIN BLOQUEAR IFRAME
+        function showSimpleAlert(message) {
+            const tempAlert = document.createElement('div');
+            tempAlert.className = 'fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4';
+            tempAlert.innerHTML = `
+                <div class="bg-white rounded-2xl w-full max-w-sm p-6 shadow-xl text-center">
+                    <i class="fa-solid fa-circle-exclamation text-amber-500 text-4xl mb-4"></i>
+                    <h5 class="font-bold text-slate-800 text-base mb-2">Aviso</h5>
+                    <p class="text-slate-500 text-xs mb-6">${message}</p>
+                    <button id="close-alert" class="w-full py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-sm font-semibold transition">Aceptar</button>
+                </div>
+            `;
+            document.body.appendChild(tempAlert);
+            document.getElementById('close-alert').onclick = () => tempAlert.remove();
+        }
+
+        function showDecisionAlert(title, message, onConfirm) {
+            const tempDecision = document.createElement('div');
+            tempDecision.className = 'fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4';
+            tempDecision.innerHTML = `
+                <div class="bg-white rounded-2xl w-full max-w-sm p-6 shadow-xl text-center">
+                    <i class="fa-solid fa-circle-exclamation text-rose-500 text-4xl mb-4"></i>
+                    <h5 class="font-bold text-slate-800 text-lg mb-2">${title}</h5>
+                    <p class="text-slate-500 text-xs mb-6">${message}</p>
+                    <div class="flex gap-3">
+                        <button id="cancel-decision" class="flex-1 py-2.5 border border-slate-200 text-slate-600 rounded-xl text-xs font-semibold hover:bg-slate-50 transition">Cancelar</button>
+                        <button id="confirm-decision" class="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-semibold transition">Sí, Confirmar</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(tempDecision);
+
+            document.getElementById('cancel-decision').onclick = () => tempDecision.remove();
+            document.getElementById('confirm-decision').onclick = () => {
+                onConfirm();
+                tempDecision.remove();
+            };
+        }
+
+        function formatDate(dateStr) {
+            const parts = dateStr.split('-');
+            return `${parts[2]}/${parts[1]}/${parts[0]}`;
+        }
+    </script>
+</body>
+</html>
